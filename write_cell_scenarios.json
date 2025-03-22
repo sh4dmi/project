@@ -1,0 +1,47 @@
+[
+    {
+        "prompt": "Change the description of Project Alpha to 'Educational initiative for elementary schools'",
+        "expected_params": {
+            "row_header": "Project Name",
+            "row_value": "Project Alpha",
+            "col_header": "Description",
+            "new_value": "Educational initiative for elementary schools"
+        }
+    },
+    {
+        "prompt": "Update the status of Task 1001 to 'Completed'",
+        "expected_params": {
+            "row_header": "Task ID",
+            "row_value": "1001",
+            "col_header": "Status",
+            "new_value": "Completed"
+        }
+    },
+    {
+        "prompt": "Set John Smith's department to 'Marketing'",
+        "expected_params": {
+            "row_header": "Name",
+            "row_value": "John Smith",
+            "col_header": "Department",
+            "new_value": "Marketing"
+        }
+    },
+    {
+        "prompt": "For Project Beta, change the budget to 50000",
+        "expected_params": {
+            "row_header": "Project Name",
+            "row_value": "Project Beta",
+            "col_header": "Budget",
+            "new_value": "50000"
+        }
+    },
+    {
+        "prompt": "Update the deadline for Project Gamma to 'December 31, 2023'",
+        "expected_params": {
+            "row_header": "Project Name",
+            "row_value": "Project Gamma",
+            "col_header": "Deadline",
+            "new_value": "December 31, 2023"
+        }
+    }
+]

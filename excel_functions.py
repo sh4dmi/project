@@ -150,6 +150,38 @@ class ExcelHandler:
         
         return row_index
     
+    def _format_cell_reference(self, row_index, col_index):
+        """
+        Format a cell reference in a human-readable way for LLM consumption.
+        
+        Args:
+            row_index (int): Row index (1-based)
+            col_index (int or str): Column index (1-based) or letter (A, B, etc.)
+            
+        Returns:
+            str: Human-readable cell reference like "cell at row 2, column B (2,B)"
+        """
+        # Get the column letter if col_index is numeric
+        if isinstance(col_index, int):
+            col_letter = get_column_letter(col_index)
+        else:
+            # If it's already a letter, use it directly
+            if isinstance(col_index, str) and col_index.isalpha():
+                col_letter = col_index.upper()
+            else:
+                # Try to convert to int and then to letter
+                try:
+                    num_col = self._get_col_index(col_index)
+                    if num_col:
+                        col_letter = get_column_letter(num_col)
+                    else:
+                        col_letter = str(col_index)
+                except:
+                    col_letter = str(col_index)
+        
+        # Create a human-readable format that describes the cell location clearly
+        return f"cell at row {row_index}, column {col_letter} ({row_index},{col_letter})"
+    
     def _validate_parameters(self, params, required_params):
         """
         Validate that the required parameters are present in the params dict.
@@ -183,6 +215,11 @@ class ExcelHandler:
                 - message (str): Success or error message
         """
         try:
+            # Get sheet dimensions before clearing
+            max_row = self.sheet.max_row
+            max_col = self.sheet.max_column
+            sheet_name = self.sheet.title
+            
             # Create a new worksheet to replace the existing one
             # This is more reliable than deleting rows for a complete reset
             ws_name = self.sheet.title
@@ -190,8 +227,10 @@ class ExcelHandler:
             self.sheet = self.workbook.create_sheet(ws_name)
             self.workbook.active = self.sheet
             
+            success_msg = f"Sheet '{sheet_name}' cleared. Removed all data ({max_row} rows by {max_col} columns). A new empty sheet has been created."
             logger.info("Sheet cleared successfully (recreated)")
-            return True, "Sheet cleared successfully"
+            
+            return True, success_msg
         except Exception as e:
             error_msg = f"Error clearing sheet: {str(e)}"
             logger.error(error_msg)
@@ -224,7 +263,10 @@ class ExcelHandler:
             self.sheet.insert_rows(actual_row_index)
             self.sheet.cell(row=actual_row_index, column=1).value = text
             
-            success_msg = f"Row {actual_row_index} added successfully"
+            # Create a cell reference for the first cell where text was added
+            cell_ref = self._format_cell_reference(actual_row_index, 'A')
+            
+            success_msg = f"New row inserted at position {actual_row_index}. Text '{text}' added to {cell_ref}"
             logger.info(success_msg)
             
             # Save the workbook
@@ -270,8 +312,14 @@ class ExcelHandler:
                 logger.error(error_msg)
                 return False, error_msg
             
+            # Get column letter for better readability
+            col_letter = get_column_letter(num_col_index)
+            
             # Log explicit target coordinates before writing
-            logger.info(f"TARGET CELL: Row={row_index}, Column={num_col_index} (Letter: {get_column_letter(num_col_index)})")
+            logger.info(f"TARGET CELL: Row={row_index}, Column={num_col_index} (Letter: {col_letter})")
+            
+            # Create formatted cell reference
+            cell_ref = self._format_cell_reference(row_index, col_letter)
             
             # Write to the cell - ONLY to the specified cell, nothing else
             target_cell = self.sheet.cell(row=row_index, column=num_col_index)
@@ -287,7 +335,7 @@ class ExcelHandler:
                 a1_value = self.sheet.cell(row=1, column=1).value
                 logger.info(f"Verifying A1 value remains unchanged: {a1_value}")
             
-            success_msg = f"Cell ({row_index}, {get_column_letter(num_col_index)}) written successfully"
+            success_msg = f"Value '{text}' written to {cell_ref}"
             logger.info(success_msg)
             
             # Save the workbook
@@ -338,7 +386,9 @@ class ExcelHandler:
             for i, value in enumerate(row_data, 1):
                 self.sheet.cell(row=row_index, column=i).value = value
             
-            success_msg = f"Row {row_index} written successfully"
+            # Create a more descriptive message about what was written
+            row_data_summary = ", ".join([f"column {get_column_letter(i+1)}: '{val}'" for i, val in enumerate(row_data) if val is not None])
+            success_msg = f"Data written to row {row_index}. Values: {row_data_summary}"
             logger.info(success_msg)
             
             # Save the workbook
@@ -377,10 +427,16 @@ class ExcelHandler:
                 logger.error(error_msg)
                 return False, error_msg
             
+            # Get column letter for better readability
+            col_letter = get_column_letter(num_col_index)
+            
+            # Create formatted cell reference
+            cell_ref = self._format_cell_reference(row_index, col_letter)
+            
             # Clear the cell
             self.sheet.cell(row=row_index, column=num_col_index).value = None
             
-            success_msg = f"Cell ({row_index}, {col_index}) cleared successfully"
+            success_msg = f"Content cleared from {cell_ref}"
             logger.info(success_msg)
             
             # Save the workbook
@@ -415,10 +471,14 @@ class ExcelHandler:
             if isinstance(row_index, str) and row_index.isdigit():
                 row_index = int(row_index)
             
+            # Store the original row contents for better reporting
+            original_row, _ = self.read_row(row_index)
+            row_data_description = ", ".join([f"'{val}'" for val in original_row if val is not None])
+            
             # Delete the row
             self.sheet.delete_rows(row_index)
             
-            success_msg = f"Row {row_index} deleted successfully"
+            success_msg = f"Row {row_index} deleted. Original values: {row_data_description}"
             logger.info(success_msg)
             
             # Save the workbook
@@ -450,10 +510,17 @@ class ExcelHandler:
                 logger.error(error_msg)
                 return False, error_msg
             
+            # Get column letter for better reporting
+            col_letter = get_column_letter(num_col_index)
+            
+            # Store the original column contents for better reporting
+            original_column, _ = self.read_column(col_index)
+            column_data_description = ", ".join([f"'{val}'" for val in original_column if val is not None])
+            
             # Delete the column
             self.sheet.delete_cols(num_col_index)
             
-            success_msg = f"Column {col_index} deleted successfully"
+            success_msg = f"Column {col_letter} (index {num_col_index}) deleted. Original values: {column_data_description}"
             logger.info(success_msg)
             
             # Save the workbook
@@ -563,10 +630,16 @@ class ExcelHandler:
                 logger.error(error_msg)
                 return None, error_msg
             
+            # Get column letter for better readability
+            col_letter = get_column_letter(num_col_index)
+            
+            # Create formatted cell reference
+            cell_ref = self._format_cell_reference(row_index, col_letter)
+            
             # Read the cell
             cell_value = self.sheet.cell(row=row_index, column=num_col_index).value
             
-            success_msg = f"Cell ({row_index}, {col_index}) read successfully"
+            success_msg = f"Value '{cell_value}' read from {cell_ref}"
             logger.info(success_msg)
             
             return cell_value, success_msg
@@ -654,6 +727,109 @@ class ExcelHandler:
             error_msg = f"Error finding column index: {str(e)}"
             logger.error(error_msg)
             return None, error_msg
+    
+    def get_row_index_by_value(self, col_index, search_value):
+        """
+        Find a row index by searching for a value in a specific column.
+        
+        Args:
+            col_index (int or str): Column index or letter where to search
+            search_value (str): Value to search for
+            
+        Returns:
+            tuple: (row_index, message)
+                - row_index (int): Row index (1-based) or None if not found
+                - message (str): Success or error message
+        """
+        try:
+            # Convert column index if needed
+            numeric_col_index = self._get_col_index(col_index)
+            if not numeric_col_index:
+                error_msg = f"Invalid column index: {col_index}"
+                logger.error(error_msg)
+                return None, error_msg
+            
+            # Read the column
+            column_data, _ = self.read_column(col_index)
+            if not column_data:
+                error_msg = f"No data found in column {col_index}"
+                logger.error(error_msg)
+                return None, error_msg
+            
+            # Convert search_value to string for comparison
+            search_value_str = str(search_value)
+            
+            # Find the row with matching value
+            for row_idx, cell_value in enumerate(column_data, 1):
+                if cell_value is not None and str(cell_value) == search_value_str:
+                    success_msg = f"Row index found: {row_idx} with value '{search_value}' in column {col_index}"
+                    logger.info(success_msg)
+                    return row_idx, success_msg
+            
+            error_msg = f"Value '{search_value}' not found in column {col_index}"
+            logger.error(error_msg)
+            return None, error_msg
+        except Exception as e:
+            error_msg = f"Error finding row index: {str(e)}"
+            logger.error(error_msg)
+            return None, error_msg
+    
+    def update_cell_by_lookup(self, row_header, row_value, col_header, new_value):
+        """
+        Find and update a cell by looking up the row based on a value and column based on header.
+        
+        Args:
+            row_header (str): Header name of the column that contains the row identifier
+            row_value (str): Value to search for in the row identifier column
+            col_header (str): Header name of the column to update
+            new_value (str): New value to set in the target cell
+            
+        Returns:
+            tuple: (success, message)
+                - success (bool): True if the operation was successful, False otherwise
+                - message (str): Success or error message with details of the operation
+        """
+        try:
+            # Step 1: Find column index for row identifier
+            row_col_idx, message = self.get_column_index_by_header(row_header)
+            if not row_col_idx:
+                error_msg = f"Could not find column with header '{row_header}': {message}"
+                logger.error(error_msg)
+                return False, error_msg
+            
+            # Step 2: Find column index for target column
+            target_col_idx, message = self.get_column_index_by_header(col_header)
+            if not target_col_idx:
+                error_msg = f"Could not find column with header '{col_header}': {message}"
+                logger.error(error_msg)
+                return False, error_msg
+            
+            # Step 3: Find row index based on value
+            row_idx, message = self.get_row_index_by_value(row_col_idx, row_value)
+            if not row_idx:
+                error_msg = f"Could not find row with value '{row_value}' in column '{row_header}': {message}"
+                logger.error(error_msg)
+                return False, error_msg
+            
+            # Step 4: Update the target cell
+            success, write_message = self.write_cell(row_idx, target_col_idx, new_value)
+            if not success:
+                error_msg = f"Failed to write to cell at row {row_idx}, column {target_col_idx}: {write_message}"
+                logger.error(error_msg)
+                return False, error_msg
+            
+            # Create a human-readable message with cell coordinates
+            col_letter = get_column_letter(target_col_idx)
+            success_msg = (f"Successfully updated cell at row {row_idx}, column {col_letter} "
+                          f"(identified by '{row_header}={row_value}' and '{col_header}') "
+                          f"with value '{new_value}'")
+            logger.info(success_msg)
+            return True, success_msg
+            
+        except Exception as e:
+            error_msg = f"Error updating cell by lookup: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
     
     #
     # JSON OPERATION PROCESSING
@@ -838,7 +1014,9 @@ class ExcelHandler:
                 
                 # Format result for feedback
                 if success:
-                    message = f"Success: Header row read successfully. Result: {result}"
+                    # Create a more descriptive message about the header contents
+                    header_description = ", ".join([f"'{h}'" for h in result])
+                    message = f"Success: Header row read successfully. Headers found: {header_description}"
             
             elif function_name == "excel_read_column":
                 # Check required parameters
@@ -847,6 +1025,16 @@ class ExcelHandler:
                     logger.error(error_msg)
                     return -1, f"Error: {error_msg}"
                 
+                col_index = parameters["col_index"]
+                
+                # Get a readable column identifier for the message
+                if isinstance(col_index, int):
+                    col_id = f"column {col_index} ({get_column_letter(col_index)})"
+                elif isinstance(col_index, str) and col_index.isalpha():
+                    col_id = f"column {col_index}"
+                else:
+                    col_id = f"column {col_index}"
+                
                 result, message = self.read_column(
                     parameters["col_index"]
                 )
@@ -854,7 +1042,9 @@ class ExcelHandler:
                 
                 # Format result for feedback
                 if success:
-                    message = f"Success: Column read successfully. Result: {result}"
+                    # Format column data in a more descriptive way
+                    column_data_summary = ", ".join([f"row {i+1}: '{val}'" for i, val in enumerate(result) if val is not None])
+                    message = f"Success: {col_id} read successfully. Values: {column_data_summary}"
             
             elif function_name == "excel_read_cell":
                 # Check required parameters
@@ -863,15 +1053,25 @@ class ExcelHandler:
                     logger.error(error_msg)
                     return -1, f"Error: {error_msg}"
                 
-                result, message = self.read_cell(
-                    parameters["row_index"],
-                    parameters["col_index"]
-                )
-                success = result is not None or message.startswith("Cell")
+                row_index = parameters["row_index"]
+                col_index = parameters["col_index"]
                 
-                # Format result for feedback
+                result, message = self.read_cell(
+                    row_index,
+                    col_index
+                )
+                success = result is not None or message.startswith("Value")
+                
+                # Format result for feedback - use cell_ref format
                 if success:
-                    message = f"Success: Cell read successfully. Result: {result}"
+                    # Get column letter for better formatting
+                    num_col_index = self._get_col_index(col_index)
+                    if num_col_index:
+                        col_letter = get_column_letter(num_col_index)
+                        cell_ref = self._format_cell_reference(row_index, col_letter)
+                        message = f"Success: Read value '{result}' from {cell_ref}"
+                    else:
+                        message = f"Success: Cell read successfully. Result: {result}"
             
             elif function_name == "excel_read_row":
                 # Check required parameters
@@ -880,14 +1080,18 @@ class ExcelHandler:
                     logger.error(error_msg)
                     return -1, f"Error: {error_msg}"
                 
+                row_index = parameters["row_index"]
+                
                 result, message = self.read_row(
-                    parameters["row_index"]
+                    row_index
                 )
                 success = result is not None
                 
                 # Format result for feedback
                 if success:
-                    message = f"Success: Row read successfully. Result: {result}"
+                    # Format row data in a more descriptive way
+                    row_data_summary = ", ".join([f"column {get_column_letter(i+1)}: '{val}'" for i, val in enumerate(result) if val is not None])
+                    message = f"Success: Row {row_index} read successfully. Values: {row_data_summary}"
             
             elif function_name == "excel_get_column_index_by_header":
                 # Check required parameters
@@ -904,6 +1108,50 @@ class ExcelHandler:
                 # Format result for feedback
                 if success:
                     message = f"Success: Column index found by header. Result: {result}"
+            
+            elif function_name == "excel_get_row_index_by_value":
+                # Check required parameters
+                if not self._validate_parameters(parameters, ["col_index", "search_value"]):
+                    error_msg = "Missing required parameters for get_row_index_by_value. Needs: col_index, search_value"
+                    logger.error(error_msg)
+                    return -1, f"Error: {error_msg}"
+                
+                col_index = parameters["col_index"]
+                search_value = parameters["search_value"]
+                
+                result, message = self.get_row_index_by_value(
+                    col_index,
+                    search_value
+                )
+                success = result is not None
+                
+                # Format result for feedback
+                if success:
+                    message = f"Success: Row index found by value. Result: {result}"
+            
+            elif function_name == "excel_update_cell_by_lookup":
+                # Check required parameters
+                if not self._validate_parameters(parameters, ["row_header", "row_value", "col_header", "new_value"]):
+                    error_msg = "Missing required parameters for update_cell_by_lookup. Needs: row_header, row_value, col_header, new_value"
+                    logger.error(error_msg)
+                    return -1, f"Error: {error_msg}"
+                
+                row_header = parameters["row_header"]
+                row_value = parameters["row_value"]
+                col_header = parameters["col_header"]
+                new_value = parameters["new_value"]
+                
+                result, message = self.update_cell_by_lookup(
+                    row_header,
+                    row_value,
+                    col_header,
+                    new_value
+                )
+                success = result
+                
+                # Format result for feedback
+                if success:
+                    message = f"Success: Cell updated successfully. {message}"
             
             else:
                 error_msg = f"Unknown function: {function_name}"

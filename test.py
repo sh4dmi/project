@@ -67,7 +67,8 @@ class TestExcelFunctions(unittest.TestCase):
         
         # Verify
         self.assertTrue(success)
-        self.assertIn("cleared successfully", message)
+        self.assertIn("Sheet", message)
+        self.assertIn("clear", message)
         self.assertEqual(self.excel.sheet.max_row, 1)  # Empty sheet has 1 row
         
         # Verify cell is empty
@@ -85,7 +86,8 @@ class TestExcelFunctions(unittest.TestCase):
         # Verify
         self.assertTrue(success1)
         self.assertTrue(success2)
-        self.assertIn("added successfully", message1)
+        self.assertIn("row", message1.lower())
+        self.assertIn("5", message1)
         
         # Verify content
         cell_value1, _ = self.excel.read_cell(5, 1)
@@ -103,7 +105,8 @@ class TestExcelFunctions(unittest.TestCase):
         
         # Verify
         self.assertTrue(success)
-        self.assertIn("written successfully", message)
+        self.assertIn("Value", message)
+        self.assertIn("written", message)
         
         # Verify content
         cell_value, _ = self.excel.read_cell(2, 2)
@@ -129,7 +132,7 @@ class TestExcelFunctions(unittest.TestCase):
         
         # Verify
         self.assertTrue(success)
-        self.assertIn("written successfully", message)
+        self.assertIn("Data written to row", message)
         
         # Verify content
         row_value, _ = self.excel.read_row(2)
@@ -167,7 +170,7 @@ class TestExcelFunctions(unittest.TestCase):
         
         # Verify
         self.assertTrue(success)
-        self.assertIn("cleared successfully", message)
+        self.assertIn("cleared", message.lower())
         
         # Verify cell is cleared
         cell_value_after, _ = self.excel.read_cell(2, 3)
@@ -192,7 +195,9 @@ class TestExcelFunctions(unittest.TestCase):
         
         # Verify
         self.assertTrue(success)
-        self.assertIn("deleted successfully", message)
+        self.assertIn("Row", message)
+        self.assertIn("2", message)
+        self.assertIn("deleted", message)
         
         # Verify row 3 is now at position 2
         row2_after, _ = self.excel.read_row(2)
@@ -212,7 +217,8 @@ class TestExcelFunctions(unittest.TestCase):
         
         # Verify
         self.assertTrue(success)
-        self.assertIn("deleted successfully", message)
+        self.assertIn("Column", message)
+        self.assertIn("deleted", message)
         
         # Verify column is removed and Age moved to position 2
         header_after, _ = self.excel.read_header_row()
@@ -233,7 +239,7 @@ class TestExcelFunctions(unittest.TestCase):
         
         # Verify
         self.assertIsNotNone(header)
-        self.assertIn("read successfully", message)
+        self.assertIn("Header row read", message)
         self.assertEqual(header[0], "ID")
         self.assertEqual(header[1], "Name")
     
@@ -244,7 +250,8 @@ class TestExcelFunctions(unittest.TestCase):
         
         # Verify
         self.assertIsNotNone(column)
-        self.assertIn("read successfully", message)
+        self.assertIn("Column", message)
+        self.assertIn("read", message)
         self.assertEqual(column[0], "Name")
         self.assertEqual(column[1], "John Smith")
         
@@ -266,7 +273,8 @@ class TestExcelFunctions(unittest.TestCase):
         
         # Verify
         self.assertEqual(cell_value, "John Smith")
-        self.assertIn("read successfully", message)
+        self.assertIn("Value", message)
+        self.assertIn("read", message)
         
         # Read with column letter
         cell_letter, _ = self.excel.read_cell(2, "B")
@@ -283,7 +291,8 @@ class TestExcelFunctions(unittest.TestCase):
         
         # Verify
         self.assertIsNotNone(row)
-        self.assertIn("read successfully", message)
+        self.assertIn("Row", message)
+        self.assertIn("read", message)
         self.assertEqual(row[0], 1)  # ID
         self.assertEqual(row[1], "John Smith")  # Name
         
