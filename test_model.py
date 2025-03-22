@@ -99,12 +99,93 @@ model.resize_token_embeddings(len(tokenizer))
 model.config.pad_token_id = tokenizer.pad_token_id  # Set pad token ID
 
 
-def generate_response(user_input, chat_history=None):
+def generate_response(user_input, chat_history=None, excel_handler=None):
     """Generate a response from the model"""
     if chat_history is None:
         chat_history = []
     
-    messages = chat_history + [{"role": "user", "content": f"{system_prompt}\n\n{user_input}"}]
+    # Add data context to the prompt if Excel handler is provided
+    context_prompt = ""
+    if excel_handler:
+        context_prompt = "Here is the current Excel structure:\n\n"
+        
+        # Add Projects section
+        project_headers, _ = excel_handler.read_row(1)
+        if project_headers and any(project_headers):
+            context_prompt += "PROJECTS:\n"
+            context_prompt += f"Headers (Row 1): {', '.join([str(h) for h in project_headers if h])}\n"
+            
+            # Add a few sample rows
+            for row_idx in range(2, 5):
+                try:
+                    row_data, _ = excel_handler.read_row(row_idx)
+                    if row_data and any(row_data):
+                        # Format row data with headers for clarity
+                        formatted_row = []
+                        for i, cell in enumerate(row_data):
+                            if cell and project_headers and i < len(project_headers) and project_headers[i]:
+                                formatted_row.append(f"{project_headers[i]}: {cell}")
+                            elif cell:
+                                formatted_row.append(str(cell))
+                        context_prompt += f"Row {row_idx}: {', '.join(formatted_row)}\n"
+                except:
+                    pass
+            
+            context_prompt += "\n"
+        
+        # Add Tasks section if it exists
+        try:
+            task_headers, _ = excel_handler.read_row(6)
+            if task_headers and any(task_headers):
+                context_prompt += "TASKS:\n"
+                context_prompt += f"Headers (Row 6): {', '.join([str(h) for h in task_headers if h])}\n"
+                
+                # Add a few sample rows
+                for row_idx in range(7, 10):
+                    try:
+                        row_data, _ = excel_handler.read_row(row_idx)
+                        if row_data and any(row_data):
+                            # Format row data with headers for clarity
+                            formatted_row = []
+                            for i, cell in enumerate(row_data):
+                                if cell and task_headers and i < len(task_headers) and task_headers[i]:
+                                    formatted_row.append(f"{task_headers[i]}: {cell}")
+                                elif cell:
+                                    formatted_row.append(str(cell))
+                            context_prompt += f"Row {row_idx}: {', '.join(formatted_row)}\n"
+                    except:
+                        pass
+                
+                context_prompt += "\n"
+        except:
+            pass
+        
+        # Add Employees section if it exists
+        try:
+            emp_headers, _ = excel_handler.read_row(11)
+            if emp_headers and any(emp_headers):
+                context_prompt += "EMPLOYEES:\n"
+                context_prompt += f"Headers (Row 11): {', '.join([str(h) for h in emp_headers if h])}\n"
+                
+                # Add a few sample rows
+                for row_idx in range(12, 15):
+                    try:
+                        row_data, _ = excel_handler.read_row(row_idx)
+                        if row_data and any(row_data):
+                            # Format row data with headers for clarity
+                            formatted_row = []
+                            for i, cell in enumerate(row_data):
+                                if cell and emp_headers and i < len(emp_headers) and emp_headers[i]:
+                                    formatted_row.append(f"{emp_headers[i]}: {cell}")
+                                elif cell:
+                                    formatted_row.append(str(cell))
+                            context_prompt += f"Row {row_idx}: {', '.join(formatted_row)}\n"
+                    except:
+                        pass
+        except:
+            pass
+    
+    messages = chat_history + [{"role": "user", "content": f"{system_prompt}\n\n{context_prompt}\n\nUser instruction: {user_input}"}]
     encoded = tokenizer.apply_chat_template(messages, return_tensors="pt").to(device)
     
     model.eval()
@@ -270,7 +351,7 @@ class WriteExcelTest:
         logger.info(f"Running test case: {test_case}")
         
         # Generate response from the model
-        response = generate_response(test_case)
+        response = generate_response(test_case, excel_handler=self.excel)
         logger.info(f"Model response: {response[:100]}..." if len(response) > 100 else response)
         
         # Extract JSON from response
@@ -489,14 +570,21 @@ def run_interactive_test():
     print("\nExcel Cell Update Interactive Test")
     print("Type 'exit' to quit")
     print("Type 'show' to display current data")
+    print("Type 'debug' to see what's being sent to the LLM")
     
     chat_history = []
+    debug_mode = False
     
     while True:
         user_input = input("\nEnter your instruction (e.g., 'Change Project Alpha's status to Completed'): ")
         
         if user_input.lower() == 'exit':
             break
+        
+        if user_input.lower() == 'debug':
+            debug_mode = not debug_mode
+            print(f"Debug mode: {'ON' if debug_mode else 'OFF'}")
+            continue
         
         if user_input.lower() == 'show':
             # Display current data
@@ -508,7 +596,14 @@ def run_interactive_test():
             print(f"   Headers: {', '.join([str(h) for h in project_headers if h])}")
             for row_idx in range(2, 5):
                 row_data, _ = test_excel.read_row(row_idx)
-                print(f"   Row {row_idx}: {', '.join([str(cell) for cell in row_data if cell])}")
+                # Show all columns for each row clearly
+                formatted_row = []
+                for i, cell in enumerate(row_data):
+                    if cell and project_headers and i < len(project_headers) and project_headers[i]:
+                        formatted_row.append(f"{project_headers[i]}: {cell}")
+                    elif cell:
+                        formatted_row.append(str(cell))
+                print(f"   Row {row_idx}: {', '.join(formatted_row)}")
             
             # Show Tasks
             print("\nTasks:")
@@ -516,7 +611,14 @@ def run_interactive_test():
             print(f"   Headers: {', '.join([str(h) for h in task_headers if h])}")
             for row_idx in range(7, 10):
                 row_data, _ = test_excel.read_row(row_idx)
-                print(f"   Row {row_idx}: {', '.join([str(cell) for cell in row_data if cell])}")
+                # Show all columns for each row clearly
+                formatted_row = []
+                for i, cell in enumerate(row_data):
+                    if cell and task_headers and i < len(task_headers) and task_headers[i]:
+                        formatted_row.append(f"{task_headers[i]}: {cell}")
+                    elif cell:
+                        formatted_row.append(str(cell))
+                print(f"   Row {row_idx}: {', '.join(formatted_row)}")
             
             # Show Employees
             print("\nEmployees:")
@@ -524,14 +626,77 @@ def run_interactive_test():
             print(f"   Headers: {', '.join([str(h) for h in emp_headers if h])}")
             for row_idx in range(12, 15):
                 row_data, _ = test_excel.read_row(row_idx)
-                print(f"   Row {row_idx}: {', '.join([str(cell) for cell in row_data if cell])}")
+                # Show all columns for each row clearly
+                formatted_row = []
+                for i, cell in enumerate(row_data):
+                    if cell and emp_headers and i < len(emp_headers) and emp_headers[i]:
+                        formatted_row.append(f"{emp_headers[i]}: {cell}")
+                    elif cell:
+                        formatted_row.append(str(cell))
+                print(f"   Row {row_idx}: {', '.join(formatted_row)}")
             
             continue
         
         print(f"\nProcessing: '{user_input}'")
         
+        # Create context for the LLM
+        context_prompt = "Here is the current Excel structure:\n\n"
+        
+        # Add Projects section
+        project_headers, _ = test_excel.read_row(1)
+        context_prompt += "PROJECTS:\n"
+        context_prompt += f"Headers (Row 1): {', '.join([str(h) for h in project_headers if h])}\n"
+        for row_idx in range(2, 5):
+            row_data, _ = test_excel.read_row(row_idx)
+            # Show all columns for each row clearly
+            formatted_row = []
+            for i, cell in enumerate(row_data):
+                if cell and project_headers and i < len(project_headers) and project_headers[i]:
+                    formatted_row.append(f"{project_headers[i]}: {cell}")
+                elif cell:
+                    formatted_row.append(str(cell))
+            context_prompt += f"Row {row_idx}: {', '.join(formatted_row)}\n"
+        
+        context_prompt += "\nTASKS:\n"
+        task_headers, _ = test_excel.read_row(6)
+        context_prompt += f"Headers (Row 6): {', '.join([str(h) for h in task_headers if h])}\n"
+        for row_idx in range(7, 10):
+            row_data, _ = test_excel.read_row(row_idx)
+            # Show all columns for each row clearly
+            formatted_row = []
+            for i, cell in enumerate(row_data):
+                if cell and task_headers and i < len(task_headers) and task_headers[i]:
+                    formatted_row.append(f"{task_headers[i]}: {cell}")
+                elif cell:
+                    formatted_row.append(str(cell))
+            context_prompt += f"Row {row_idx}: {', '.join(formatted_row)}\n"
+        
+        context_prompt += "\nEMPLOYEES:\n"
+        emp_headers, _ = test_excel.read_row(11)
+        context_prompt += f"Headers (Row 11): {', '.join([str(h) for h in emp_headers if h])}\n"
+        for row_idx in range(12, 15):
+            row_data, _ = test_excel.read_row(row_idx)
+            # Show all columns for each row clearly
+            formatted_row = []
+            for i, cell in enumerate(row_data):
+                if cell and emp_headers and i < len(emp_headers) and emp_headers[i]:
+                    formatted_row.append(f"{emp_headers[i]}: {cell}")
+                elif cell:
+                    formatted_row.append(str(cell))
+            context_prompt += f"Row {row_idx}: {', '.join(formatted_row)}\n"
+        
+        if debug_mode:
+            print("\n=== FULL LLM PROMPT ===")
+            print("--- SYSTEM PROMPT ---")
+            print(system_prompt)
+            print("\n--- DATA CONTEXT ---")
+            print(context_prompt)
+            print("\n--- USER INSTRUCTION ---")
+            print(user_input)
+            print("=== END PROMPT ===\n")
+        
         # Generate response from the model
-        response = generate_response(user_input, chat_history)
+        response = generate_response(user_input, chat_history, test_excel)
         print("\nLLM Response:", response)
         
         # Try to execute the command if it contains JSON
